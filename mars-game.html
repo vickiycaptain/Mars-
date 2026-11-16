@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Марсианская логистика</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Rubik:wght@400;500;700&display=swap">
+<style>
+  :root { --bg:#15131A; --card:rgba(34,30,41,.92); --text:#F3EDE6; --soft:#CFC6D2; --mars:#F07A45; --ok:#4FBF8F; --bad:#E5534B; --line:#3A3342; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:'Rubik', Arial, sans-serif; }
+  #app { position:fixed; inset:0; display:flex; flex-direction:column; }
+  #wrap { position:relative; flex:1; touch-action:none; }
+  canvas#c { position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  .hud { position:absolute; top:10px; left:10px; right:10px; display:flex; gap:6px; pointer-events:none; }
+  .hud .box { background:var(--card); border-radius:12px; padding:6px 9px; flex:1; }
+  .hud .lbl { color:var(--soft); font-size:10px; letter-spacing:.06em; text-transform:uppercase; }
+  .hud .val { font-family:'Oswald', Arial, sans-serif; font-size:19px; line-height:1.1; }
+  .fuel { height:5px; background:var(--line); border-radius:9px; margin-top:4px; overflow:hidden; }
+  .fuel div { height:100%; background:var(--mars); width:100%; }
+  .good { color:var(--ok); } .warn { color:var(--bad); }
+
+  .ctrl { display:grid; grid-template-columns:1fr 1.6fr 1fr; gap:10px; padding:10px 12px calc(12px + env(safe-area-inset-bottom)); background:#0F0D13; touch-action:none; user-select:none; -webkit-user-select:none; }
+  .btn { height:70px; border-radius:18px; border:2px solid var(--line); background:#221E29; color:var(--text); font-family:'Oswald', Arial, sans-serif; font-size:22px; text-transform:uppercase; }
+  .btn.main { background:var(--mars); color:#15131A; border-color:var(--mars); font-size:24px; }
+  .btn.on { filter:brightness(1.25); transform:scale(.97); }
+
+  .overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:12px; background:rgba(21,19,26,.74); backdrop-filter:blur(3px); z-index:5; touch-action:pan-y; }
+  .overlay.show { display:flex; animation:fade .3s ease-out; }
+  @keyframes fade { from { opacity:0; } }
+  .panel { width:100%; max-width:440px; max-height:100%; overflow-y:auto; background:#1C1922; border:1px solid var(--line); border-radius:22px; padding:20px 18px; display:flex; flex-direction:column; gap:12px; animation:pop .4s cubic-bezier(.2,1.4,.4,1); }
+  .panel > * { flex-shrink:0; }
+  @keyframes pop { from { transform:scale(.92); opacity:0; } }
+  .eyebrow { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--mars); font-weight:500; }
+  h1 { font-family:'Oswald', Arial, sans-serif; text-transform:uppercase; font-size:36px; line-height:1.05; margin:0; }
+  h2 { font-family:'Oswald', Arial, sans-serif; text-transform:uppercase; font-size:26px; margin:0; line-height:1.1; }
+  p { margin:0; line-height:1.45; font-size:15px; color:var(--soft); }
+  b { color:var(--text); }
+  .steps { display:flex; gap:4px; }
+  .steps i { flex:1; height:4px; border-radius:4px; background:var(--line); }
+  .steps i.on { background:var(--mars); }
+  input[type=text] { width:100%; font:inherit; font-size:17px; padding:13px; border-radius:12px; border:2px solid var(--line); background:#221E29; color:var(--text); text-align:center; }
+  input[type=text]:focus { outline:none; border-color:var(--mars); }
+  .go { width:100%; padding:15px; border-radius:14px; border:none; background:var(--mars); color:#15131A; font:inherit; font-size:17px; font-weight:700; cursor:pointer; }
+  .go:disabled { opacity:.35; }
+  .go.sec { background:var(--line); color:var(--text); }
+  .task { background:#221E29; border:2px dashed var(--mars); border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
+  .task .q { color:var(--text); font-size:15px; }
+  .ans { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .ans button { padding:11px 4px; border-radius:10px; border:2px solid var(--line); background:#2A2532; color:var(--text); font:inherit; font-size:15px; font-weight:500; cursor:pointer; }
+  .ans button.right { border-color:var(--ok); background:#1E3A31; }
+  .ans button.wrong { border-color:var(--bad); background:#3C1F22; }
+  .fb { font-size:14px; display:none; }
+  .fb.on { display:block; }
+  .choice { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .opt { text-align:left; padding:12px; border-radius:14px; border:2px solid var(--line); background:#221E29; color:var(--text); font:inherit; cursor:pointer; display:flex; flex-direction:column; gap:6px; }
+  .opt.sel { border-color:var(--mars); background:#33221F; }
+  .opt h3 { margin:0; font-size:16px; }
+  .opt span { font-size:13px; color:var(--soft); line-height:1.35; }
+  .opt .pr { font-family:'Oswald', Arial, sans-serif; font-size:20px; color:var(--mars); }
+  input[type=range] { width:100%; accent-color:var(--mars); height:30px; }
+  .row { display:flex; justify-content:space-between; align-items:baseline; gap:8px; font-size:15px; color:var(--soft); }
+  .row b { font-family:'Oswald', Arial, sans-serif; font-size:20px; font-weight:500; }
+  .big { font-family:'Oswald', Arial, sans-serif; font-size:40px; color:var(--mars); line-height:1; }
+  canvas.chart { width:100%; height:130px; background:#221E29; border-radius:12px; display:block; }
+  .tip { background:#221E29; border-left:4px solid var(--mars); border-radius:10px; padding:10px 12px; font-size:14px; color:var(--text); line-height:1.4; }
+  table { width:100%; border-collapse:collapse; font-size:15px; }
+  td { padding:7px 4px; border-bottom:1px solid var(--line); color:var(--soft); }
+  td:last-child { text-align:right; font-family:'Oswald', Arial, sans-serif; font-size:17px; color:var(--text); }
+  tr.tot td { border-bottom:none; font-weight:700; color:var(--text); padding-top:10px; }
+  tr.tot td:last-child { font-size:30px; }
+  .pos { color:var(--ok) !important; } .neg { color:var(--bad) !important; }
+  .small { font-size:12px; color:#9A90A2; text-align:center; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="wrap">
+    <canvas id="c"></canvas>
+    <div class="hud" id="hud" style="display:none">
+      <div class="box"><div class="lbl">Топливо</div><div class="val" id="hFuel">100%</div><div class="fuel"><div id="hFuelBar"></div></div></div>
+      <div class="box"><div class="lbl">Падение</div><div class="val" id="hVy">0</div></div>
+      <div class="box"><div class="lbl">Снос</div><div class="val" id="hVx">0</div></div>
+      <div class="box"><div class="lbl">Груз</div><div class="val" id="hQ">0 т</div></div>
+    </div>
+
+    <!-- 0. старт -->
+    <div class="overlay show" id="o0"><div class="panel">
+      <p class="eyebrow">Игра от Вики и Евы</p>
+      <h1>Марсианская логистика</h1>
+      <p>Ты - глава первой службы доставки грузов на Марс. Колонии нужны грузы, а инвесторам - прибыль.</p>
+      <p>Сначала прими 3 бизнес-решения и реши 2 задачи. Потом сам посади Starship. В конце узнаешь, принесла ли твоя миссия <b>прибыль</b> или <b>убыток</b>.</p>
+      <input type="text" id="name" maxlength="18" placeholder="Название твоей компании">
+      <button class="go" id="b0">Начать</button>
+      <p class="small">Все цифры в игре условные, в «игровых млн $»</p>
+    </div></div>
+
+    <!-- 1. корабль + задача про амортизацию -->
+    <div class="overlay" id="o1"><div class="panel">
+      <div class="steps"><i class="on"></i><i></i><i></i><i></i></div>
+      <p class="eyebrow">Решение 1 · Себестоимость</p>
+      <h2>Какой корабль купить?</h2>
+      <div class="task">
+        <p class="eyebrow">Задача 1 · бонус +50</p>
+        <p class="q">Многоразовый корабль стоит <b>1000</b> и может слетать <b>10 раз</b>. Сколько стоит корабль в расчёте на <b>один полёт</b>?</p>
+        <div class="ans" id="t1">
+          <button data-v="10">10</button><button data-v="100">100</button><button data-v="1000">1000</button>
+        </div>
+        <p class="fb" id="t1fb"></p>
+      </div>
+      <div class="choice">
+        <button class="opt" data-ship="one"><h3>Одноразовая ракета</h3><span class="pr">300</span><span>Дешевле купить, но после полёта её выбрасывают. Вся цена ложится на один рейс.</span></button>
+        <button class="opt" data-ship="re"><h3>Многоразовый Starship</h3><span class="pr">1000</span><span>На 10 полётов: в рейс идёт 100. Но если разобьёшь, потеряешь все 1000!</span></button>
+      </div>
+      <button class="go" id="b1" disabled>Дальше</button>
+    </div></div>
+
+    <!-- 2. цена и спрос -->
+    <div class="overlay" id="o2"><div class="panel">
+      <div class="steps"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+      <p class="eyebrow">Решение 2 · Цена и спрос</p>
+      <h2>Сколько брать за тонну груза?</h2>
+      <p>Чем дороже доставка, тем меньше заказывают клиенты. Это <b>закон спроса</b>. Каждая тонна стоит тебе <b>2</b> (упаковка, погрузка, жизнеобеспечение роботов).</p>
+      <div class="row"><span>Цена за тонну</span><b id="pV">10</b></div>
+      <input type="range" id="price" min="2" max="20" step="1" value="6">
+      <canvas class="chart" id="chart"></canvas>
+      <div class="two">
+        <div class="row"><span>Заказали</span><b id="qV">0 т</b></div>
+        <div class="row"><span>Выручка</span><b id="rV">0</b></div>
+      </div>
+      <div class="row"><span>Выручка минус расходы на груз</span><b id="mV">0</b></div>
+      <div class="task">
+        <p class="eyebrow">Задача 2 · бонус +50</p>
+        <p class="q">Подвигай ползунок и найди цену, при которой <b>выручка минус расходы на груз</b> самая большая. Бонус дадут, если попадёшь точно.</p>
+      </div>
+      <div class="tip" id="tip2">⚠️ Больше груза - тяжелее корабль. Садиться будет сложнее!</div>
+      <button class="go" id="b2">Готово</button>
+    </div></div>
+
+    <!-- 3. топливо -->
+    <div class="overlay" id="o3"><div class="panel">
+      <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+      <p class="eyebrow">Решение 3 · Переменные издержки</p>
+      <h2>Сколько топлива залить?</h2>
+      <p>Каждые 10% бака стоят <b>3</b>. Больше топлива - проще посадка, но дороже рейс. Мало топлива - экономия, но можно не успеть затормозить.</p>
+      <div class="row"><span>Бак заполнен</span><b id="fV">70%</b></div>
+      <input type="range" id="fuel" min="40" max="100" step="10" value="70">
+      <div class="row"><span>Стоимость топлива</span><b id="fC">21</b></div>
+      <div class="tip" id="tip3"></div>
+      <button class="go" id="b3">На старт!</button>
+    </div></div>
+
+    <!-- 4. итог -->
+    <div class="overlay" id="o4"><div class="panel">
+      <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+      <p class="eyebrow" id="eTag">Отчёт о прибыли</p>
+      <h2 id="eTitle"></h2>
+      <table id="pl"></table>
+      <div class="tip" id="eLesson"></div>
+      <p class="small" id="eBest"></p>
+      <div class="two">
+        <button class="go sec" id="bRe">Изменить решения</button>
+        <button class="go" id="bFly">Лететь снова</button>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="ctrl">
+    <button class="btn" id="kL">◀</button>
+    <button class="btn main" id="kU">🔥 Газ</button>
+    <button class="btn" id="kR">▶</button>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+let W = 0, H = 0, S = 1, DPR = 1;
+
+// ===== экономика =====
+const VC = 2;                       // переменные издержки на тонну
+const FUEL_PRICE = 3;               // за 10% бака
+const demand = p => Math.max(0, 100 - 5 * p);   // спрос, т
+const BEST_P = 11;                  // max (P-2)(100-5P)
+const G = { name: "", ship: null, t1: false, t1ok: false, price: 6, fuel: 70, tries: 0, best: null };
+
+// ===== игра =====
+const SAFE_VY = 15, SAFE_VX = 8, M = 3;
+let stars = [], hills = [], terrain = [], pad = null;
+let ship, parts = [], state = "menu", last = 0, shake = 0;
+const keys = { L:false, U:false, R:false };
+
+function show(id) {
+  document.querySelectorAll(".overlay").forEach(o => o.classList.remove("show"));
+  if (id) $(id).classList.add("show");
+}
+
+// --- шаг 0
+$("b0").onclick = () => { G.name = $("name").value.trim(); show("o1"); };
+
+// --- шаг 1
+document.querySelectorAll("#t1 button").forEach(b => b.onclick = () => {
+  if (G.t1) return;
+  G.t1 = true;
+  const ok = b.dataset.v === "100";
+  G.t1ok = ok;
+  document.querySelectorAll("#t1 button").forEach(x => { if (x.dataset.v === "100") x.classList.add("right"); });
+  if (!ok) b.classList.add("wrong");
+  const fb = $("t1fb");
+  fb.innerHTML = ok ? "<b class='good'>Верно! +50.</b> 1000 / 10 = 100. Это и есть амортизация: цена корабля делится на все его полёты."
+                    : "<b class='warn'>Не совсем.</b> 1000 / 10 = 100. Цена корабля делится на все его полёты - это амортизация.";
+  fb.classList.add("on");
+});
+document.querySelectorAll("[data-ship]").forEach(b => b.onclick = () => {
+  G.ship = b.dataset.ship;
+  document.querySelectorAll("[data-ship]").forEach(x => x.classList.toggle("sel", x === b));
+  $("b1").disabled = false;
+});
+$("b1").onclick = () => { show("o2"); drawChart(); };
+
+// --- шаг 2
+function upd2() {
+  const p = +$("price").value; G.price = p;
+  const q = demand(p);
+  $("pV").textContent = p;
+  $("qV").textContent = q + " т";
+  $("rV").textContent = p * q;
+  $("mV").textContent = (p - VC) * q;
+  $("tip2").textContent = q >= 70 ? "⚠️ Груза очень много: корабль тяжёлый, садиться будет трудно!"
+    : q >= 40 ? "⚠️ Больше груза - тяжелее корабль. Садиться будет сложнее!"
+    : q > 0 ? "🪶 Корабль лёгкий, сесть проще. Но и заработаешь меньше." : "😶 По такой цене никто не заказал. Лететь пустым?";
+  drawChart();
+}
+$("price").oninput = upd2;
+function drawChart() {
+  const c = $("chart"), r = c.getBoundingClientRect(), d = Math.min(devicePixelRatio || 1, 2);
+  c.width = r.width * d; c.height = r.height * d;
+  const g = c.getContext("2d"); g.setTransform(d, 0, 0, d, 0, 0);
+  const w = r.width, h = r.height, pl = 10, pr = 10, pt = 14, pb = 20;
+  const x = p => pl + (p - 2) / 18 * (w - pl - pr);
+  const maxM = 405, y = v => pt + (1 - v / maxM) * (h - pt - pb);
+  g.clearRect(0, 0, w, h);
+  g.strokeStyle = "#3A3342"; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(pl, h - pb); g.lineTo(w - pr, h - pb); g.stroke();
+  g.fillStyle = "#9A90A2"; g.font = "11px Rubik, Arial";
+  g.fillText("цена →", w - 48, h - 6);
+  g.fillText("выручка минус расходы на груз", pl, 11);
+  g.strokeStyle = "#F07A45"; g.lineWidth = 2.5; g.beginPath();
+  for (let p = 2; p <= 20; p += .25) { const v = (p - VC) * demand(p); p === 2 ? g.moveTo(x(p), y(v)) : g.lineTo(x(p), y(v)); }
+  g.stroke();
+  const p = G.price, v = (p - VC) * demand(p);
+  g.fillStyle = "#F3EDE6"; g.beginPath(); g.arc(x(p), y(v), 6, 0, 7); g.fill();
+  g.strokeStyle = "rgba(243,237,230,.3)"; g.setLineDash([3, 4]); g.beginPath(); g.moveTo(x(p), y(v)); g.lineTo(x(p), h - pb); g.stroke(); g.setLineDash([]);
+}
+$("b2").onclick = () => { show("o3"); upd3(); };
+
+// --- шаг 3
+function upd3() {
+  const f = +$("fuel").value; G.fuel = f;
+  $("fV").textContent = f + "%";
+  $("fC").textContent = f / 10 * FUEL_PRICE;
+  const q = demand(G.price);
+  $("tip3").textContent = f <= 50 && q >= 40 ? "😬 Тяжёлый корабль и мало топлива. Смело! Или безрассудно?"
+    : f <= 50 ? "Экономно. Придётся тормозить очень точно."
+    : f >= 90 ? "Запас большой. Посадка проще, но рейс дороже." : "Золотая середина.";
+}
+$("fuel").oninput = upd3;
+$("b3").onclick = launch;
+
+// --- полёт
+function launch() {
+  G.tries++;
+  newLevel();
+  state = "play";
+  $("hud").style.display = "flex";
+  show(null);
+}
+$("bFly").onclick = launch;
+$("bRe").onclick = () => { state = "menu"; $("hud").style.display = "none"; show("o1"); };
+
+// ===== итог =====
+function report(ok, vy, vx) {
+  const q = demand(G.price);
+  const rev = ok ? G.price * q : 0;
+  const shipCost = G.ship === "one" ? 300 : (ok ? 100 : 1000);
+  const cargo = VC * q;
+  const fuelC = G.fuel / 10 * FUEL_PRICE;
+  const b1 = G.t1ok ? 50 : 0, b2 = G.price === BEST_P ? 50 : 0;
+  const profit = rev - shipCost - cargo - fuelC + b1 + b2;
+  if (G.best === null || profit > G.best) G.best = profit;
+
+  const nm = G.name ? " · " + G.name : "";
+  $("eTag").textContent = (ok ? "Груз доставлен" : "Авария") + nm;
+  $("eTag").style.color = ok ? "var(--ok)" : "var(--bad)";
+  $("eTitle").textContent = profit > 300 ? "Инвесторы аплодируют стоя!"
+    : profit > 0 ? "Миссия прибыльная!"
+    : ok ? "Сели, но в убыток" : "Starship разбит, деньги сгорели";
+  const row = (a, v, cls) => `<tr><td>${a}</td><td class="${cls || ""}">${v > 0 ? "+" : ""}${v}</td></tr>`;
+  $("pl").innerHTML =
+    row("Выручка: " + G.price + " × " + (ok ? q : 0) + " т", rev, rev > 0 ? "pos" : "") +
+    row(G.ship === "one" ? "Одноразовая ракета" : ok ? "Корабль: амортизация 1000 / 10" : "Корабль разбит: потеряно всё", -shipCost, "neg") +
+    row("Расходы на груз: 2 × " + q + " т", -cargo, cargo ? "neg" : "") +
+    row("Топливо: " + G.fuel + "%", -fuelC, "neg") +
+    (b1 ? row("Бонус за задачу 1", b1, "pos") : "") +
+    (b2 ? row("Бонус за задачу 2 (лучшая цена)", b2, "pos") : "") +
+    `<tr class="tot"><td>Прибыль</td><td class="${profit >= 0 ? "pos" : "neg"}">${profit > 0 ? "+" : ""}${profit}</td></tr>`;
+
+  let lesson;
+  if (!ok && G.ship === "re") lesson = "💡 Многоразовый корабль выгоден, только если он возвращается целым. Разбил с первого раза - и вся цена корабля легла на один рейс. Поэтому SpaceX так много тестирует посадку.";
+  else if (!ok) lesson = "💡 Без доставки нет выручки, а издержки уже потрачены. Риск в космосе - главная статья расходов.";
+  else if (G.ship === "one") lesson = "💡 Сравни: многоразовый корабль обошёлся бы в этом рейсе в 100, а не в 300. Вот почему многоразовость снижает себестоимость.";
+  else if (G.price !== BEST_P) lesson = "💡 Цена " + G.price + " - не лучшая. Самая большая разница между выручкой и расходами на груз при цене " + BEST_P + ": клиенты закажут " + demand(BEST_P) + " т. Слишком дорого - мало заказов, слишком дёшево - мало денег с тонны.";
+  else lesson = "💡 Идеально: многоразовый корабль, лучшая цена и мягкая посадка. Именно так SpaceX хочет сделать полёты на Марс выгодными.";
+  if (ok) lesson += " Посадка: падение " + vy.toFixed(0) + " м/с, снос " + vx.toFixed(0) + " м/с.";
+  $("eLesson").textContent = lesson;
+  $("eBest").textContent = "Лучший результат: " + (G.best > 0 ? "+" : "") + G.best + " · попыток: " + G.tries;
+  show("o4");
+}
+
+// ===== движок посадки =====
+function resize() {
+  const r = cv.getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = r.width; H = r.height;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  S = H / 640;
+  stars = Array.from({ length: 90 }, () => ({ x: Math.random() * W, y: Math.random() * H * .75, r: Math.random() * 1.4 + .3, t: Math.random() * 6 }));
+  hills = [];
+  for (let x = -20; x <= W + 40; x += 30) hills.push({ x, y: H * .62 + Math.sin(x * .012) * 26 + Math.sin(x * .031) * 12 });
+  if (state !== "play") newLevel();
+}
+
+function newLevel() {
+  const base = H * .84, padW = Math.max(70, 86 * S);
+  const padX = padW / 2 + 30 + Math.random() * (W - padW - 60);
+  pad = { x: padX, w: padW, y: base - 6 * S };
+  terrain = [];
+  const n1 = Math.random() * 10, n2 = Math.random() * 10;
+  for (let x = 0; x <= W + 14; x += 14) {
+    let y = base + Math.sin(x * .02 + n1) * 22 * S + Math.sin(x * .07 + n2) * 9 * S + Math.random() * 4 * S;
+    const d = Math.abs(x - pad.x);
+    if (d < pad.w / 2 + 6) y = pad.y;
+    else if (d < pad.w / 2 + 40) { const k = (d - pad.w / 2 - 6) / 34; y = pad.y * (1 - k) + y * k; }
+    terrain.push({ x, y });
+  }
+  const sx = pad.x < W / 2 ? W * (.6 + Math.random() * .25) : W * (.15 + Math.random() * .25);
+  ship = { x: sx, y: H * .13, vx: (Math.random() < .5 ? -1 : 1) * (8 + Math.random() * 10) * S, vy: 12 * S, fuel: G.fuel, tilt: 0, alive: true };
+  if (state === "menu") { ship.x = W * .5; ship.y = H * .4; }
+  parts = [];
+}
+
+function groundAt(x) {
+  const i = Math.max(0, Math.min(terrain.length - 2, Math.floor(x / 14)));
+  const a = terrain[i], b = terrain[i + 1], k = Math.max(0, Math.min(1, (x - a.x) / 14));
+  return a.y + (b.y - a.y) * k;
+}
+
+function puff(x, y, vx, vy, col, life, size, n) {
+  for (let i = 0; i < n; i++) parts.push({ x, y, vx: vx + (Math.random() - .5) * 60 * S, vy: vy + (Math.random() - .5) * 60 * S, life, max: life, size: size * (.5 + Math.random()), col });
+}
+
+function update(dt, t) {
+  for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 20 * S * dt; p.life -= dt; }
+  parts = parts.filter(p => p.life > 0);
+  if (shake > 0) shake -= dt * 14;
+  if (state === "menu") { ship.y = H * .4 + Math.sin(t / 600) * 8 * S; ship.tilt = Math.sin(t / 900) * .05; if (Math.random() < .5) puff(ship.x, ship.y + 32 * S, 0, 140 * S, "fire", .3, 4 * S, 1); return; }
+  if (state !== "play") return;
+
+  const q = demand(G.price);
+  const mass = 1.15 - .35 * q / 100;               // тяжелее груз - слабее тяга
+  const g = 28 * S, thrust = 66 * S * mass, side = 30 * S * mass;
+  let ax = 0, ay = g;
+  const U = keys.U && ship.fuel > 0, Lb = keys.L && ship.fuel > 0, Rb = keys.R && ship.fuel > 0;
+  if (U) { ay -= thrust; ship.fuel -= 13 * dt; }
+  if (Lb) { ax -= side; ship.fuel -= 5 * dt; }
+  if (Rb) { ax += side; ship.fuel -= 5 * dt; }
+  ship.fuel = Math.max(0, ship.fuel);
+  ship.vx += ax * dt; ship.vy += ay * dt;
+  ship.x += ship.vx * dt; ship.y += ship.vy * dt;
+  ship.tilt += ((ship.vx / (40 * S)) * .35 + (Rb ? .12 : 0) - (Lb ? .12 : 0) - ship.tilt) * Math.min(1, dt * 6);
+  if (ship.x < 10) { ship.x = 10; ship.vx = Math.abs(ship.vx) * .3; }
+  if (ship.x > W - 10) { ship.x = W - 10; ship.vx = -Math.abs(ship.vx) * .3; }
+  const h = 64 * S;
+  if (U) {
+    puff(ship.x, ship.y + h * .5, ship.vx, 160 * S + ship.vy, "fire", .35, 5 * S, 3);
+    const gy = groundAt(ship.x);
+    if (gy - (ship.y + h / 2) < 90 * S) puff(ship.x, gy - 2, 0, -20 * S, "dust", .9, 7 * S, 2);
+  }
+  if (Lb) puff(ship.x + 8 * S, ship.y - h * .25, 90 * S, 0, "gas", .3, 3 * S, 1);
+  if (Rb) puff(ship.x - 8 * S, ship.y - h * .25, -90 * S, 0, "gas", .3, 3 * S, 1);
+  const bottom = ship.y + h / 2;
+  if ([ship.x - 9 * S, ship.x, ship.x + 9 * S].some(lx => bottom >= groundAt(lx))) land();
+  hud();
+}
+
+function land() {
+  const vy = ship.vy / S / M, vx = Math.abs(ship.vx) / S / M;
+  const onPad = Math.abs(ship.x - pad.x) < pad.w / 2 - 6 * S;
+  const ok = onPad && vy <= SAFE_VY && vx <= SAFE_VX;
+  state = "over";
+  if (ok) {
+    ship.y = pad.y - 32 * S; ship.vx = ship.vy = 0; ship.tilt = 0;
+    puff(ship.x, pad.y, 0, -30 * S, "dust", 1.2, 9 * S, 40);
+  } else {
+    ship.alive = false; shake = 10;
+    puff(ship.x, ship.y + 20 * S, 0, -120 * S, "boom", 1.4, 12 * S, 70);
+    puff(ship.x, ship.y + 20 * S, 0, -60 * S, "smoke", 2.2, 14 * S, 30);
+  }
+  keys.L = keys.U = keys.R = false;
+  setTimeout(() => report(ok, vy, vx), 1300);
+}
+
+function hud() {
+  const vy = ship.vy / S / M, vx = Math.abs(ship.vx) / S / M;
+  $("hFuel").textContent = Math.round(ship.fuel) + "%";
+  $("hFuelBar").style.width = ship.fuel + "%";
+  $("hFuelBar").style.background = ship.fuel < 15 ? "var(--bad)" : "var(--mars)";
+  $("hVy").textContent = Math.max(0, vy).toFixed(0) + " м/с";
+  $("hVx").textContent = vx.toFixed(0) + " м/с";
+  $("hVy").className = "val " + (vy <= SAFE_VY ? "good" : "warn");
+  $("hVx").className = "val " + (vx <= SAFE_VX ? "good" : "warn");
+  $("hQ").textContent = demand(G.price) + " т";
+}
+
+function drawShip(firing) {
+  const h = 64 * S, w = 14 * S;
+  ctx.save(); ctx.translate(ship.x, ship.y); ctx.rotate(ship.tilt);
+  if (firing) {
+    const f = (18 + Math.random() * 14) * S;
+    const grd = ctx.createLinearGradient(0, h / 2, 0, h / 2 + f);
+    grd.addColorStop(0, "#FFF4C2"); grd.addColorStop(.4, "#F7A23B"); grd.addColorStop(1, "rgba(240,90,40,0)");
+    ctx.fillStyle = grd; ctx.beginPath(); ctx.moveTo(-w * .4, h / 2); ctx.lineTo(w * .4, h / 2); ctx.lineTo(0, h / 2 + f); ctx.closePath(); ctx.fill();
+  }
+  ctx.strokeStyle = "#8C8796"; ctx.lineWidth = 2 * S;
+  ctx.beginPath(); ctx.moveTo(-w * .4, h * .38); ctx.lineTo(-w * .75, h / 2); ctx.moveTo(w * .4, h * .38); ctx.lineTo(w * .75, h / 2); ctx.stroke();
+  ctx.fillStyle = "#6E6A78";
+  [[-1], [1]].forEach(([s]) => {
+    ctx.beginPath(); ctx.moveTo(s * w / 2, h * .2); ctx.lineTo(s * w * .95, h * .42); ctx.lineTo(s * w / 2, h * .42); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(s * w / 2, -h * .28); ctx.lineTo(s * w * .85, -h * .16); ctx.lineTo(s * w / 2, -h * .12); ctx.fill();
+  });
+  const body = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+  body.addColorStop(0, "#8E8A97"); body.addColorStop(.45, "#ECEAF0"); body.addColorStop(1, "#77737F");
+  ctx.fillStyle = body; ctx.beginPath();
+  ctx.moveTo(-w / 2, h / 2 - 4 * S); ctx.lineTo(-w / 2, -h * .3);
+  ctx.quadraticCurveTo(-w / 2, -h / 2, 0, -h / 2); ctx.quadraticCurveTo(w / 2, -h / 2, w / 2, -h * .3);
+  ctx.lineTo(w / 2, h / 2 - 4 * S); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#2A2530"; ctx.fillRect(-w / 2, h / 2 - 6 * S, w, 4 * S);
+  ctx.fillStyle = "#3A3342"; ctx.beginPath(); ctx.arc(0, -h * .26, 2.2 * S, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+function draw(t) {
+  ctx.save();
+  if (shake > 0) ctx.translate((Math.random() - .5) * shake * 2, (Math.random() - .5) * shake * 2);
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "#0E0C14"); sky.addColorStop(.55, "#2A1620"); sky.addColorStop(1, "#5A2A1E");
+  ctx.fillStyle = sky; ctx.fillRect(-20, -20, W + 40, H + 40);
+  for (const s of stars) { ctx.globalAlpha = .35 + .35 * Math.sin(t / 900 + s.t); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#6FA8DC"; ctx.beginPath(); ctx.arc(W * .82, H * .12, 4, 0, 7); ctx.fill();
+  ctx.fillStyle = "rgba(111,168,220,.25)"; ctx.beginPath(); ctx.arc(W * .82, H * .12, 9, 0, 7); ctx.fill();
+  ctx.fillStyle = "#9C8F86"; ctx.beginPath(); ctx.ellipse(W * .18, H * .22, 11 * S, 8 * S, .4, 0, 7); ctx.fill();
+  ctx.fillStyle = "#7A3221"; ctx.beginPath(); ctx.moveTo(-20, H); for (const p of hills) ctx.lineTo(p.x, p.y); ctx.lineTo(W + 40, H); ctx.fill();
+  const gr = ctx.createLinearGradient(0, H * .75, 0, H); gr.addColorStop(0, "#C2502E"); gr.addColorStop(1, "#6B2416");
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(0, H); for (const p of terrain) ctx.lineTo(p.x, p.y); ctx.lineTo(W, H); ctx.fill();
+  const blink = (Math.sin(t / 200) + 1) / 2;
+  if (state !== "menu") {
+    ctx.fillStyle = "#2A2530"; ctx.fillRect(pad.x - pad.w / 2, pad.y, pad.w, 6 * S);
+    ctx.fillStyle = `rgba(240,122,69,${.5 + .5 * blink})`;
+    ctx.fillRect(pad.x - pad.w / 2, pad.y - 2, 6 * S, 3); ctx.fillRect(pad.x + pad.w / 2 - 6 * S, pad.y - 2, 6 * S, 3);
+    ctx.fillStyle = "#F3EDE6"; ctx.font = `600 ${11 * S}px Oswald, Arial`; ctx.textAlign = "center";
+    ctx.fillText("ПЛОЩАДКА", pad.x, pad.y + 22 * S);
+    if (state === "play") {
+      ctx.strokeStyle = `rgba(240,122,69,${.15 + .25 * blink})`; ctx.setLineDash([4, 6]); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(pad.x, pad.y - 4); ctx.lineTo(pad.x, H * .3); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+  for (const p of parts) {
+    const a = p.life / p.max;
+    ctx.fillStyle = p.col === "fire" ? `rgba(255,${150 + 80 * a | 0},60,${a})`
+      : p.col === "dust" ? `rgba(200,110,70,${a * .5})`
+      : p.col === "gas" ? `rgba(230,230,240,${a * .7})`
+      : p.col === "boom" ? `rgba(255,${120 + 120 * a | 0},40,${a})` : `rgba(60,50,60,${a * .6})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (p.col === "smoke" ? (2 - a) : 1), 0, 7); ctx.fill();
+  }
+  if (ship.alive) drawShip(state === "menu" || (state === "play" && keys.U && ship.fuel > 0));
+  ctx.restore();
+}
+
+function loop(t) {
+  const dt = Math.min(.033, (t - last) / 1000 || 0); last = t;
+  update(dt, t); draw(t);
+  requestAnimationFrame(loop);
+}
+
+function bind(id, k) {
+  const el = $(id);
+  const on = e => { e.preventDefault(); keys[k] = true; el.classList.add("on"); };
+  const off = e => { e.preventDefault(); keys[k] = false; el.classList.remove("on"); };
+  el.addEventListener("pointerdown", on);
+  ["pointerup", "pointercancel", "pointerleave"].forEach(ev => el.addEventListener(ev, off));
+  el.addEventListener("contextmenu", e => e.preventDefault());
+}
+bind("kL", "L"); bind("kU", "U"); bind("kR", "R");
+const KM = { ArrowLeft: "L", ArrowRight: "R", ArrowUp: "U", " ": "U" };
+addEventListener("keydown", e => { if (KM[e.key] && e.target.tagName !== "INPUT") { keys[KM[e.key]] = true; e.preventDefault(); } });
+addEventListener("keyup", e => { if (KM[e.key]) keys[KM[e.key]] = false; });
+
+addEventListener("resize", () => { resize(); if ($("o2").classList.contains("show")) drawChart(); });
+resize();
+upd2(); upd3();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
